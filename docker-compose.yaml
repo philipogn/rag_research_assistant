@@ -1,0 +1,28 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    healthcheck:
+      test: ["CMD-SHELL", "/usr/bin/ollama list > /dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - 11434:11434
+    volumes:
+      - ollama_data:/root/.ollama
+      - .:/workspace
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    depends_on:
+      ollama:
+        condition: service_healthy
+    ports:
+      - 8080:8080
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+    volumes:
+      - webui_data:/app/backend/data
+volumes:
+  ollama_data:
+  webui_data:
