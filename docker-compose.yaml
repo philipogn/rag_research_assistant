@@ -1,6 +1,19 @@
 services:
   ollama:
     image: ollama/ollama:latest
+    # entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.2 && wait"]
+    entrypoint: >
+      /bin/sh -c "
+        ollama serve &
+        until ollama list > /dev/null 2>&1; do sleep 1; done &&
+        if ollama list | grep -q llama3.2; then
+          echo 'Model already present, skipping pull';
+        else
+          echo 'Model not found, pulling...';
+          ollama pull llama3.2;
+        fi &&
+        wait
+      "
     healthcheck:
       test: ["CMD-SHELL", "/usr/bin/ollama list > /dev/null 2>&1 || exit 1"]
       interval: 10s
@@ -12,6 +25,7 @@ services:
     volumes:
       - ollama_data:/root/.ollama
       - .:/workspace
+
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     depends_on:
@@ -23,6 +37,27 @@ services:
       OLLAMA_BASE_URL: http://ollama:11434
     volumes:
       - webui_data:/app/backend/data
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - 8000:8000
+    environment:
+      ANONYMIZED_TELEMETRY: "false"
+      IS_PERSISTENT: "true"
+    volumes:
+      - chroma_data:/chroma/chroma
+  python:
+    image: python:3.11-slim
+    profiles:
+      - python
+    volumes:
+      - .:/app
+      - python_packages:/usr/local/lib/python3.11/site-packages
+    working_dir: /app
+
 volumes:
   ollama_data:
   webui_data:
+  chroma_data:
+  python_packages:
