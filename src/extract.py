@@ -2,6 +2,7 @@ import re
 import pymupdf4llm
 from pathlib import Path
 from langchain_text_splitters import MarkdownTextSplitter, RecursiveCharacterTextSplitter
+import config
 
 from embed import embed_texts, get_collection
 
@@ -39,7 +40,7 @@ def text_splitting(documents):
     embedding, which will be generated per chunk
     optional metadata
     """
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=config.CHUNK_SIZE, chunk_overlap=config.CHUNK_OVERLAP)
     # splitter = MarkdownTextSplitter(chunk_size=40, chunk_overlap=0)
 
     collection = get_collection()
@@ -61,7 +62,7 @@ def text_splitting(documents):
                 metadata.append({"paper": paper_id, "page": page_number})
                 paper_idx += 1
 
-    embeddings = embed_texts(texts)
+    embeddings = [embed_texts(text) for text in texts]
     # print(len(ids), len(texts), len(metadata))
 
     collection.upsert(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadata)
@@ -70,5 +71,4 @@ def text_splitting(documents):
 
 if __name__ == "__main__":
     md_text = all_to_md()
-    # docs = strip_references(md_text)
     text_splitting(md_text)
