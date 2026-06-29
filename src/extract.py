@@ -1,11 +1,9 @@
+import re
 import pymupdf4llm
 from pathlib import Path
-import re
 from langchain_text_splitters import MarkdownTextSplitter, RecursiveCharacterTextSplitter
 
-
 input_dir = Path("data/input_pdf")
-output_dir = Path("data/output_md")
 
 def all_to_md():
     files = []
@@ -42,21 +40,24 @@ def text_splitting(documents):
     # splitter = MarkdownTextSplitter(chunk_size=40, chunk_overlap=0)
     ids, texts, metadata = [], [] ,[]
 
-    id_idx = 0
 
     for md_file in documents:
         paper_id = md_file["paper_id"]
+        paper_idx = 0
         for page in md_file["content"]:
-            page_text = strip_references(page["text"])
-            chunks = splitter.create_documents([page_text])
-            for chunk in chunks:
-                chunk_ids = f"{paper_id}_{id_idx}"
+            # page_text = strip_references(page["text"])
+            chunks = splitter.create_documents(page["text"])
+
+            page_number = page.get("metadata", {}).get("page_number, 0")
+            for idx, chunk in enumerate(chunks):
+                chunk_ids = f"{paper_id}_{paper_idx}"
                 ids.append(chunk_ids)
                 texts.append(chunk.page_content)
-                print(page.get("metadata", {}).get("page_number", 0))
-                id_idx += 1
+                metadata.append({"paper": paper_id, "page": page_number})
+                paper_idx += 1
     print(len(texts))
     print(len(ids))
+    return ids, texts, metadata
 
 
 if __name__ == "__main__":
