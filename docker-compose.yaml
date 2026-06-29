@@ -12,10 +12,16 @@ services:
           echo 'Model not found, pulling...';
           ollama pull llama3.2;
         fi &&
+        if ollama list | grep -q nomic-embed-text; then
+          echo 'Embedding model already present, skipping pull';
+        else
+          echo 'Embedding model not found, pulling...';
+          ollama pull nomic-embed-text;
+        fi &&
         wait
       "
     healthcheck:
-      test: ["CMD-SHELL", "/usr/bin/ollama list > /dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "ollama list | grep -q llama3.2 && ollama list | grep -q nomic-embed-text || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -47,6 +53,7 @@ services:
       IS_PERSISTENT: "true"
     volumes:
       - chroma_data:/chroma/chroma
+
   python:
     image: python:3.11-slim
     profiles:
