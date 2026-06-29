@@ -60,9 +60,9 @@ def text_splitting(documents):
                 texts.append(chunk.page_content)
                 metadata.append({"paper": paper_id, "page": page_number})
                 paper_idx += 1
-                
+
     embeddings = embed_texts(texts)
-    print(len(ids), len(texts), len(metadata))
+    # print(len(ids), len(texts), len(metadata))
 
     collection.upsert(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadata)
     return ids, texts, metadata
