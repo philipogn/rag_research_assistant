@@ -19,25 +19,18 @@ def all_to_md():
             "paper_id": file.stem,
             "content": md_text
         })
-        # print(file.stem)
-        # print(file.name)
-        # print(md_text["metadata"])
-        # break
     return files
 
 # STRIPPING REFERENCES AFTER CONVERSION, CHANGE
 def strip_references(md_text):
-    files = []
     pattern = re.compile(
         r"^#{1,6}\s*\**(references)\s*\**\s*$", 
         re.IGNORECASE | re.MULTILINE
     )
-    for pdf in md_text:
-        match = pattern.search(pdf)
-        if match:
-            files.append(pdf[:match.start()].rstrip())
-    
-    return files
+    match = pattern.search(md_text)
+    if match:
+        md_text[:match.start()].rstrip()
+    return md_text
 
 def text_splitting(documents):
     """
@@ -50,23 +43,21 @@ def text_splitting(documents):
     ids, texts, metadata = [], [] ,[]
 
     id_idx = 0
-    for md_file in documents["pages"]:
-    # for md_file in output_dir.glob("*.md"):
-        # with open(md_file, "r", encoding="utf-8") as f:
-            # content = f.read()
-        file_chunk_idx = 0
-        chunks = splitter.create_documents([md_file["text"]])
-        for chunk in chunks:
-            chunk_ids = f"{md_file["paper_id"]}_{id_idx}"
-            ids.append(chunk_ids)
-            texts.append(chunk.page_content)
-            print(md_file.get("metadata", {}).get("page", 0))
-            id_idx += 1
+
+    for md_file in documents:
+        paper_id = md_file["paper_id"]
+        for page in md_file["content"]:
+            page_text = strip_references(page["text"])
+            chunks = splitter.create_documents([page_text])
+            for chunk in chunks:
+                chunk_ids = f"{paper_id}_{id_idx}"
+                ids.append(chunk_ids)
+                texts.append(chunk.page_content)
+                print(page.get("metadata", {}).get("page_number", 0))
+                id_idx += 1
     print(len(texts))
     print(len(ids))
 
-    #     print(splitter.create_documents([md_file]))
-        
 
 if __name__ == "__main__":
     md_text = all_to_md()
