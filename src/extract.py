@@ -8,7 +8,7 @@ from embed import embed_texts, get_collection
 
 input_dir = Path("data/input_pdf")
 
-def all_to_md():
+def all_to_md() -> list[dict]:
     files = []
     for file in input_dir.glob("*.pdf"):
         # page_chunks for metadeta
@@ -40,8 +40,8 @@ def text_splitting(documents):
     embedding, which will be generated per chunk
     optional metadata
     """
-    splitter = RecursiveCharacterTextSplitter(chunk_size=config.CHUNK_SIZE, chunk_overlap=config.CHUNK_OVERLAP)
-    # splitter = MarkdownTextSplitter(chunk_size=40, chunk_overlap=0)
+    # splitter = RecursiveCharacterTextSplitter(chunk_size=config.CHUNK_SIZE, chunk_overlap=config.CHUNK_OVERLAP)
+    splitter = MarkdownTextSplitter(chunk_size=config.CHUNK_SIZE, chunk_overlap=config.CHUNK_OVERLAP)
 
     collection = get_collection()
     ids, texts, metadata = [], [] ,[]
@@ -50,17 +50,20 @@ def text_splitting(documents):
         paper_id = md_file["paper_id"]
         paper_idx = 0
 
+        collection.delete(where={"paper": paper_id})
+
         for page in md_file["content"]:
             # page_text = strip_references(page["text"])
-            chunks = splitter.create_documents([page["text"]])
+            chunks = splitter.split_text(page["text"])
             page_number = page.get("metadata", {}).get("page_number", 0)
 
             for idx, chunk in enumerate(chunks):
                 chunk_ids = f"{paper_id}_{paper_idx}"
                 ids.append(chunk_ids)
-                texts.append(chunk.page_content)
+                texts.append(chunk)
                 metadata.append({"paper": paper_id, "page": page_number})
                 paper_idx += 1
+    # print(texts)
 
     embeddings = [embed_texts(text) for text in texts]
     # print(len(ids), len(texts), len(metadata))
