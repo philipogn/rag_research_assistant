@@ -6,7 +6,7 @@ import config
 
 from embed import embed_texts, get_collection
 
-input_dir = Path("data/input_pdf")
+input_dir = Path("data")
 
 def all_to_md() -> list[dict]:
     files = []
@@ -34,13 +34,12 @@ def strip_references(md_text):
     return md_text
 
 
-def text_splitting(documents):
+def text_splitting(documents: list[dict]):
     """
     func needs unique id (filename_int), documents=chunk of splitted text,
     embedding, which will be generated per chunk
     optional metadata
     """
-    # splitter = RecursiveCharacterTextSplitter(chunk_size=config.CHUNK_SIZE, chunk_overlap=config.CHUNK_OVERLAP)
     splitter = MarkdownTextSplitter(chunk_size=config.CHUNK_SIZE, chunk_overlap=config.CHUNK_OVERLAP)
 
     collection = get_collection()
@@ -63,11 +62,8 @@ def text_splitting(documents):
                 texts.append(chunk)
                 metadata.append({"paper": paper_id, "page": page_number})
                 paper_idx += 1
-    # print(texts)
 
     embeddings = [embed_texts(text) for text in texts]
-    # print(len(ids), len(texts), len(metadata))
-
     collection.upsert(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadata)
     return ids, texts, metadata
 

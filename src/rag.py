@@ -2,7 +2,7 @@ from embed import embed_texts, get_collection
 import config
 import httpx
 
-def retrieve_relevant_chunks(query, n_results=10):
+def retrieve_relevant_chunks(query: str, n_results: int=10) -> list[dict]:
     collection = get_collection()
     query_embedding = embed_texts(query)
     # retrieves relevant results based on similarity ranking
@@ -23,22 +23,16 @@ def retrieve_relevant_chunks(query, n_results=10):
 
 SYSTEM_PROMPT = (
     "You are a research assistant that helps users understand academic papers. "
-    "You will be given excerpts retrieved from one or more papers, each labeled with "
-    "its source paper and page number, followed by a question.\n\n"
+    "You will be given excerpts retrieved from one or more papers, each labeled with its source paper and page number, followed by a question.\n\n"
     "Rules:\n"
-    "1. Answer using only the information in the provided excerpts. Do not rely on "
-    "outside or prior knowledge about the topic.\n"
-    "2. If the excerpts do not contain enough information to answer the question, "
-    "say so explicitly (e.g. \"The provided excerpts don't contain enough information "
-    "to answer this.\") instead of guessing.\n"
-    "3. When you state a fact or finding from the excerpts, cite its source inline as "
-    "(paper, page).\n"
-    "4. If different excerpts disagree or come from different papers, point that out "
-    "rather than silently merging them.\n"
+    "1. Answer using only the information in the provided excerpts. Do not rely on outside or prior knowledge about the topic.\n"
+    "2. If the excerpts do not contain enough information to answer the question, say so explicitly (e.g. \"The provided excerpts don't contain enough information to answer this.\") instead of guessing.\n"
+    "3. When you state a fact or finding from the excerpts, cite its source inline as (paper, page).\n"
+    "4. If different excerpts disagree or come from different papers, point that out rather than silently merging them.\n"
     "5. Be concise and precise; prefer direct answers over restating the excerpts."
 )
 
-def generate_response(query, context):
+def generate_response(query: str, context: list[dict], model=config.GENERATION_MODEL):
     context_chunks = []
     for chunk in context:
         context_chunks.append(f"{chunk['text']} (paper:{chunk['paper']}, page:{chunk['page']})")
@@ -48,7 +42,7 @@ def generate_response(query, context):
     response = httpx.post(
         f"{config.OLLAMA_URL}/api/generate",
         json={
-            "model": config.GENERATION_MODEL,
+            "model": model,
             "system": SYSTEM_PROMPT,
             "prompt": prompt,
             "stream": False,
@@ -60,8 +54,6 @@ def generate_response(query, context):
 
 if __name__ == "__main__":
     query = "what are the results of paper Political Leaning and Politicalness Classification of Texts"
-    # query = "what are the results of paper Benchmarking Zero-shot Text Classification: Datasets, Evaluation and Entailment Approach"
     context = retrieve_relevant_chunks(query)
-    # print(context)
     response = generate_response(query, context)
     print(response)
