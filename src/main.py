@@ -36,16 +36,6 @@ def answer_query(query: str, model: str) -> tuple[str, list[str]]:
     return answer, sources
 
 
-@app.post("/api/generate")
-def generate(payload: dict = Body(default_factory=dict)):
-    """Handle Open WebUI queries with RAG."""
-    query = payload.get("prompt", "")
-    model = payload.get("model") or config.GENERATION_MODEL
-
-    answer, sources = answer_query(query, model)
-    return {"response": answer, "sources": sources}
-
-
 @app.post("/api/chat")
 def chat(payload: dict = Body(default_factory=dict)):
     """Ollama-compatible /api/chat endpoint (with RAG)."""
