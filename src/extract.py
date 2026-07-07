@@ -11,10 +11,8 @@ input_dir = Path("data")
 def all_to_md() -> list[dict]:
     files = []
     for file in input_dir.glob("*.pdf"):
-        # page_chunks for metadeta
-        md_text = pymupdf4llm.to_markdown(file, page_chunks=True)
-
-        # Path(f"data/output_md/{file.stem}.md").write_bytes(md_text.encode())
+        md_text = pymupdf4llm.to_markdown(file, page_chunks=True)   # page_chunks for metadeta
+        # Path(f"data/output_md/{file.stem}.md").write_bytes(md_text.encode()) # checking output
         files.append({
             "paper_id": file.stem,
             "content": md_text
@@ -22,7 +20,7 @@ def all_to_md() -> list[dict]:
     return files
 
 
-# STRIPPING REFERENCES AFTER CONVERSION, CHANGE
+# TODO: (currently unused) pdf converter breaks, fix
 def strip_references(md_text):
     pattern = re.compile(
         r"^#{1,6}\s*\**(references)\s*\**\s*$", 
@@ -70,4 +68,6 @@ def text_splitting(documents: list[dict]):
 
 if __name__ == "__main__":
     md_text = all_to_md()
-    text_splitting(md_text)
+    print(f"Chunking {len(md_text)} files")
+    ids, texts, metadata = text_splitting(md_text)
+    print(f"Embedded {len(ids)} chunks")
