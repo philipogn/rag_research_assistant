@@ -1,23 +1,18 @@
 services:
   ollama:
     image: ollama/ollama:latest
-    # entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.2 && wait"]
     entrypoint: >
       /bin/sh -c "
         ollama serve &
         until ollama list > /dev/null 2>&1; do sleep 1; done &&
-        if ollama list | grep -q llama3.2; then
-          echo 'Model already present, skipping pull';
-        else
-          echo 'Model not found, pulling...';
-          ollama pull llama3.2;
-        fi &&
-        if ollama list | grep -q nomic-embed-text; then
-          echo 'Embedding model already present, skipping pull';
-        else
-          echo 'Embedding model not found, pulling...';
-          ollama pull nomic-embed-text;
-        fi &&
+        for model in llama3.2 nomic-embed-text; do
+          if ollama list | grep -q \"$$model\"; then
+            echo \"$$model already present, skipping pull\";
+          else
+            echo \"$$model not found, pulling...\";
+            ollama pull \"$$model\";
+          fi
+        done &&
         wait
       "
     healthcheck:
@@ -30,19 +25,40 @@ services:
       - 11434:11434
     volumes:
       - ollama_data:/root/.ollama
-      - .:/workspace
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     depends_on:
       ollama:
         condition: service_healthy
+      rag-bridge:
+        condition: service_healthy
     ports:
       - 8080:8080
     environment:
-      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_BASE_URL: http://rag-bridge:8888
     volumes:
       - webui_data:/app/backend/data
+
+  rag-bridge:
+    build:
+      context: .
+      dockerfile: src/Dockerfile
+    depends_on:
+      ollama:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+    ports:
+      - 8888:8888
+    volumes:
+      - .:/app
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8888/api/version || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   chromadb:
     image: chromadb/chroma:latest
