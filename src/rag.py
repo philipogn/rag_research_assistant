@@ -1,10 +1,19 @@
+from functools import lru_cache
 from embed import embed_texts, get_collection
 import config
 import httpx
 
-def retrieve_relevant_chunks(query: str, n_results: int=10) -> list[dict]:
+_http_client = httpx.Client(base_url=config.OLLAMA_URL, timeout=120)
+
+@lru_cache(maxsize=256)
+def _cached_query_embedding(query: str) -> tuple[float, ...]:
+    # keyed on exact query text, tuple keeps the cached vector immutable
+    return tuple(embed_texts(query))
+
+
+def retrieve_relevant_chunks(query: str, n_results: int=config.N_RESULTS) -> list[dict]:
     collection = get_collection()
-    query_embedding = embed_texts(query)
+    query_embedding = list(_cached_query_embedding(query))
     # retrieves relevant results based on similarity ranking
     results = collection.query(
         query_embeddings=[query_embedding], 
@@ -39,15 +48,14 @@ def generate_response(query: str, context: list[dict], model=config.GENERATION_M
     full_context = "\n\n".join(context_chunks)
     prompt = f"Context:\n{full_context}\n\nQuestion:\n{query}"
 
-    response = httpx.post(
-        f"{config.OLLAMA_URL}/api/generate",
+    response = _http_client.post(
+        "/api/generate",
         json={
             "model": model,
             "system": SYSTEM_PROMPT,
             "prompt": prompt,
             "stream": False,
         },
-        timeout=120,
     )
     response.raise_for_status()
     return response.json()["response"]
