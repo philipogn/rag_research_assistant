@@ -56,23 +56,47 @@ def strip_references(md_text):
         return md_text[:match.start()].rstrip()
     return md_text
 
+def _chunk_table_markdown(table_markdown: str, chunk_size: int) -> list[str]:
+    """Split an oversized table on row boundaries, repeating the header+separator in each piece."""
+    if len(table_markdown) <= chunk_size:
+        return [table_markdown]
+
+    lines = table_markdown.split("\n")
+    header = lines[:2]  # header row + separator row
+    chunks = []
+    current = list(header)
+    current_len = len("\n".join(current))
+    for row in lines[2:]:
+        if current_len + len(row) + 1 > chunk_size and len(current) > 2:
+            chunks.append("\n".join(current))
+            current = list(header)
+            current_len = len("\n".join(current))
+        current.append(row)
+        current_len += len(row) + 1
+    if len(current) > 2:
+        chunks.append("\n".join(current))
+    return chunks
+
 
 def _split_page_text(text: str, tables: list[dict], splitter: MarkdownTextSplitter) -> list[str]:
     """Split page markdown into chunks, keeping detected tables intact"""
-    chunks = []
+    non_table_parts = []
+    table_chunks = []
     remaining = text
     for table in tables:
         idx = remaining.find(table["markdown"]) # find start idx of table
         if idx == -1: # if no tables found
             continue
         before, remaining = remaining[:idx], remaining[idx + len(table["markdown"]):]
-        if before.strip():
-            chunks.extend(splitter.split_text(before))
-        # TODO: table chunking if larger than chunk size
-        chunks.extend(splitter.split_text(table["markdown"]))
-    if remaining.strip():
-        chunks.extend(splitter.split_text(remaining))
+        non_table_parts.append(before)
+        table_chunks.extend(_chunk_table_markdown(table["markdown"], config.CHUNK_SIZE))
+    non_table_parts.append(remaining)
 
+    chunks = []
+    combined_text = "\n\n".join(part for part in non_table_parts if part.strip())
+    if combined_text.strip():
+        chunks.extend(splitter.split_text(combined_text))
+    chunks.extend(table_chunks)
     return chunks
 
 
