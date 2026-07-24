@@ -23,4 +23,11 @@ def recall_at_k(retrieved: list[dict], expected: list[dict], k: int) -> float:
 
     return len(retrieved_set & expected_set) / len(expected_set)
 
+def evaluate_retrieval(retrieved: list[dict], expected: list[dict], k_values=(3, 5, 10)) -> dict:
+    scores = {}
+    for k in k_values:
+        scores[f"precision@{k}"] = precision_at_k(retrieved, expected, k)
+        scores[f"recall@{k}"] = recall_at_k(retrieved, expected, k)
+    return scores
+
 # add mrr

@@ -2,7 +2,7 @@ import json
 import httpx
 import config
 
-_http_client = httpx.Client(base_url=config.OLLAMA_URL, timeout=120)
+_http_client = httpx.Client(base_url=config.GPU_JUDGE_MODEL, timeout=120)
 
 JUDGE_SYSTEM_PROMPT = (
     "You are grading an AI assistant's answer against retrieved source excerpts. "
