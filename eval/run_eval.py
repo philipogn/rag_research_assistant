@@ -1,11 +1,16 @@
 import json
 from pathlib import Path
+from datetime import datetime
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from rag import generate_response, retrieve_relevant_chunks
 from judge import judge_response
 from retrieval_metrics import evaluate_retrieval
 
 GOLDEN_DATASET_PATH = Path(__file__).parent / "golden_dataset.jsonl"
+RESULTS_DIR = Path(__file__).parent / "results"
 K_VALUES = (3, 5, 10)
 
 def load_golden_dataset(path: Path):
@@ -23,7 +28,7 @@ def run_single_eval(entry: dict, k_vals=K_VALUES):
         "answerable": entry["answerable"],
         "answer": answer,
         "judge": judge,
-        "retrieval": evaluate_retrieval(retrieved, entry["expectecd_sources"], k_vals)
+        "retrieval": evaluate_retrieval(retrieved, entry["expected_sources"], k_vals)
     }
     return results
 
@@ -37,6 +42,10 @@ def main():
         results.append(run_single_eval(entry))
         print(f"Completed {count}")
         count += 1
+    RESULTS_DIR.mkdir(exist_ok=True)
+    out_path = RESULTS_DIR / f"{datetime.now():%Y%m%dT%H%M%S}.json"
+    out_path.write_text(json.dumps({"results": results}, indent=2))
+
     return results
 
 

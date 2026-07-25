@@ -2,7 +2,7 @@ import json
 import httpx
 import config
 
-_http_client = httpx.Client(base_url=config.GPU_JUDGE_MODEL, timeout=120)
+_http_client = httpx.Client(base_url=config.GPU_JUDGE_URL, timeout=120)
 
 JUDGE_SYSTEM_PROMPT = (
     "You are grading an AI assistant's answer against retrieved source excerpts. "
@@ -29,8 +29,9 @@ def _build_judge_prompt(query: str, context: list[dict], answer: str) -> str:
     )
 
 
-def judge_response(query: str, context: list[dict], answer: str, model: str=config.OLLAMA_URL) -> dict:
+def judge_response(query: str, context: list[dict], answer: str, model: str=config.JUDGE_MODEL) -> dict:
     prompt = _build_judge_prompt(query, context, answer)
+
     response = _http_client.post(
         "/api/generate",
         json={
@@ -42,6 +43,7 @@ def judge_response(query: str, context: list[dict], answer: str, model: str=conf
             "options": {"temperature": 0},
         },
     )
+    response.raise_for_status()
     raw = response.json()["response"]
 
     try:
