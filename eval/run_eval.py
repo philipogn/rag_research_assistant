@@ -30,8 +30,30 @@ def run_single_eval(entry: dict, k_vals=K_VALUES):
         "judge": judge,
         "retrieval": evaluate_retrieval(retrieved, entry["expected_sources"], k_vals)
     }
+
+    if entry["expected_sources"]:
+        results["retrieval"] = evaluate_retrieval(retrieved, entry["expected_sources"], k_vals)
+    else:
+        results["declined"] = judge.get("declined")
+    
     return results
 
+def _mean(values: list[float]) -> float:
+    return sum(values) / len(values)
+
+def aggregate(results: list[dict]) -> dict:
+    answerable = [r for r in results if r["answerable"]]
+
+    agg = {
+        "total_queries": len(results)
+    }
+
+    if answerable:
+        keys = answerable[0]["retrieval"]
+        for k in keys:
+            agg[f"mean_{k}"] = _mean([r["retrieval"][k] for r in answerable])
+    
+    return agg
 # include judge scores
 
 def main():
@@ -42,9 +64,11 @@ def main():
         results.append(run_single_eval(entry))
         print(f"Completed {count}")
         count += 1
+    agg = aggregate(results)
+
     RESULTS_DIR.mkdir(exist_ok=True)
     out_path = RESULTS_DIR / f"{datetime.now():%Y%m%dT%H%M%S}.json"
-    out_path.write_text(json.dumps({"results": results}, indent=2))
+    out_path.write_text(json.dumps({"results": results, "aggregate": agg}, indent=2))
 
     return results
 
