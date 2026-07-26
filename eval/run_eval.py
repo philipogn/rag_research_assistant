@@ -27,8 +27,7 @@ def run_single_eval(entry: dict, k_vals=K_VALUES):
         "query": entry["query"],
         "answerable": entry["answerable"],
         "answer": answer,
-        "judge": judge,
-        "retrieval": evaluate_retrieval(retrieved, entry["expected_sources"], k_vals)
+        "judge": judge, # reasoning, faithfulness_score, hallucination, relevancy_score, declined
     }
 
     if entry["expected_sources"]:
@@ -43,27 +42,39 @@ def _mean(values: list[float]) -> float:
 
 def aggregate(results: list[dict]) -> dict:
     answerable = [r for r in results if r["answerable"]]
+    judge_success = [r for r in results if "error" not in r["judge"]]
 
-    agg = {
-        "total_queries": len(results)
-    }
+    agg = {"total_queries": len(results)}
 
     if answerable:
         keys = answerable[0]["retrieval"]
         for k in keys:
             agg[f"mean_{k}"] = _mean([r["retrieval"][k] for r in answerable])
+
+    if judge_success:
+        agg["mean_faithfulness_score"] = _mean(
+            [r["judge"]["faithfulness_score"] for r in judge_success if r["judge"].get("faithfulness_score") is not None]
+        ) / 5
+        agg["mean_relevancy_score"] = _mean(
+            [r["judge"]["relevancy_score"] for r in judge_success if r["judge"].get("relevancy_score") is not None]
+        ) / 5
     
     return agg
-# include judge scores
 
 def main():
-    results = []
-    count = 0
-    data = load_golden_dataset(GOLDEN_DATASET_PATH)
-    for entry in data:
-        results.append(run_single_eval(entry))
-        print(f"Completed {count}")
-        count += 1
+    from tqdm import tqdm
+    # results = []
+    # count = 0
+    # data = load_golden_dataset(GOLDEN_DATASET_PATH)
+    # for entry in data:
+    #     results.append(run_single_eval(entry))
+    #     print(f"Completed {count}")
+    #     count += 1
+
+    results = [
+        run_single_eval(entry)
+        for entry in tqdm(load_golden_dataset(GOLDEN_DATASET_PATH), desc="Evaluating")
+    ]
     agg = aggregate(results)
 
     RESULTS_DIR.mkdir(exist_ok=True)
