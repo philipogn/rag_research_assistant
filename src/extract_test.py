@@ -10,60 +10,80 @@ from embed import embed_texts, get_collection
 input_dir = Path("data")
 output_dir = Path("data/output_md")
 
-def docling_to_md(file: Path, converter: DocumentConverter):
+def _extract_paper_content(file: Path, converter: DocumentConverter) -> list[dict]:
+    """Extracts page number, label, and text attributes"""
     result = converter.convert(str(file))
     doc = result.document
-
-    doc.save_as_markdown(output_dir / f"test_{file.stem}.md")
+    # doc.save_as_json(output_dir / f"test_{file.stem}.json")
     # print(doc.export_to_markdown())
+    
+    items = []
+    for item, _ in doc.iterate_items():
+        if not getattr(item, "prov", None):
+            continue
+        page_num = item.prov[0].page_no
+        label = getattr(item, "label", "")
+
+        if label == "picture": # skip pics, not useful
+            continue
+        elif label == "table":
+            items.append((page_num, "table", item.export_to_markdown(doc)))
+        else:
+            text = getattr(item, "text", "")
+            if text and text.strip():
+                items.append((page_num, label, text))
+    print(items)
+    return items
+
 
 def files_to_docling():
     converter = DocumentConverter()
     papers = []
     for file in input_dir.glob("*.pdf"):
-        content = docling_to_md(file, converter)
+        content = _extract_paper_content(file, converter)
         papers.append({
             "paper_id": file.stem,
             "content": content
         })
-        break
+        break # TEMPORARY, REMOVE AFTER TESTING
+    return papers
 
 
-# TODO: (currently unused) pdf converter breaks, fix
-def strip_references(md_text):
-    pattern = re.compile(
-        r"^#{1,6}\s*\**(references)\s*\**\s*$", 
-        re.IGNORECASE | re.MULTILINE
-    )
-    match = pattern.search(md_text)
-    if match:
-        return md_text[:match.start()].rstrip()
-    return md_text
+# TODO: could use docling label attribute to exclude references instead of regex
+# def strip_references(md_text):
+#     pattern = re.compile(
+#         r"^#{1,6}\s*\**(references)\s*\**\s*$", 
+#         re.IGNORECASE | re.MULTILINE
+#     )
+#     match = pattern.search(md_text)
+#     if match:
+#         return md_text[:match.start()].rstrip()
+#     return md_text
+
+def build_chunks():
+    pass
+
 
 def text_splitting(documents: list[dict]):
     """
-    func needs unique id (filename_int), documents=chunk of splitted text,
-    embedding, which will be generated per chunk
-    optional metadata
+    Chunk and embed the contents
+    Each paper are keys of {paper_id, content(page_num, label, text)}
     """
     splitter = MarkdownTextSplitter(chunk_size=config.CHUNK_SIZE, chunk_overlap=config.CHUNK_OVERLAP)
     collection = get_collection()
     ids, texts, metadata = [], [] ,[]
 
-    # Each doc is dict of {paper_id, md_content, tables}
-    for md_file in documents:
-        paper_id = md_file["paper_id"]
-        # paper_idx = 0
+    for paper in documents:
+        paper_id = paper["paper_id"]
         collection.delete(where={"paper": paper_id})
 
-        chunks = chunking_function_here(md_file["content"], splitter)
+        chunks = build_chunks(paper["content"], splitter)
 
-        for chunk in chunks:
-            chunk_ids = f"{paper_id}_{paper_idx}"
+        for idx, chunk in enumerate(chunks):
+            chunk_ids = f"{paper_id}_{idx}"
             ids.append(chunk_ids)
             texts.append(chunk)
-            metadata.append({"paper": paper_id, "page": page_number})
-            paper_idx += 1
+            # metadata.append({"paper": paper_id, "page": page_number})
 
     embeddings = [embed_texts(text) for text in texts]
     collection.upsert(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadata)
