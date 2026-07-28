@@ -32,9 +32,29 @@ def _extract_paper_content(file: Path, converter: DocumentConverter) -> list[dic
             text = getattr(item, "text", "")
             if text and text.strip():
                 items.append((page_num, label, text))
-    print(items)
+    # print(items)
     return items
 
+def _chunk_table_markdown(table_markdown: str, chunk_size: int) -> list[str]:
+    """Split an oversized table on row boundaries, repeating the header+separator in each piece."""
+    if len(table_markdown) <= chunk_size:
+        return [table_markdown]
+
+    lines = table_markdown.split("\n")
+    header = lines[:2]  # header row + separator row
+    chunks = []
+    current = list(header)
+    current_len = len("\n".join(current))
+    for row in lines[2:]:
+        if current_len + len(row) + 1 > chunk_size and len(current) > 2:
+            chunks.append("\n".join(current))
+            current = list(header)
+            current_len = len("\n".join(current))
+        current.append(row)
+        current_len += len(row) + 1
+    if len(current) > 2:
+        chunks.append("\n".join(current))
+    return chunks
 
 def files_to_docling():
     converter = DocumentConverter()
@@ -60,8 +80,36 @@ def files_to_docling():
 #         return md_text[:match.start()].rstrip()
 #     return md_text
 
-def build_chunks():
-    pass
+def build_chunks(paper: list[tuple], splitter: MarkdownTextSplitter):
+    chunks = [] # build to return
+    heading = "" # keep track of latest heading for section aware splitting
+    current_page = None
+    pending_parts = []
+
+    def build_pending_parts():
+        if not pending_parts: return
+        combined = "\n\n".join(pending_parts)
+        for piece in splitter.split_text(combined):
+            sectioned_chunk = f"[Section: {heading}]\n{piece}"
+            chunks.append((sectioned_chunk))
+
+    for page_num, label, text in paper:
+        if label == "section_header":
+            # function to build all previous text under prev header
+            # then update header
+            heading = text.strip()
+            pass
+        if label == "table":
+            # same as above to avoid table seperating texts
+            pass
+        if current_page is not None and page_num != current_page: # if page mismatch, build prev text, keeps metadata intact
+            build_pending_parts()
+        current_page = page_num
+        pending_parts.append(text)
+
+    build_pending_parts() # final run for any leftover text
+    return chunks
+
 
 
 def text_splitting(documents: list[dict]):
