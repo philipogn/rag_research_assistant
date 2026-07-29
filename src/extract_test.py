@@ -66,14 +66,10 @@ def _preprocess_table(table_markdown: str) -> str:
     cleaning up to reduce chunk size 
     """
     cleaned = []
-    for line in table_markdown.split():
-        stripped = line.strip()
-        if not stripped:
-            continue
+    for line in table_markdown.split("\n"):
         # matches at 4 dashes, minimise seperator to 3 dashes for readability/debugging and avoids removing dash for n/a data
-        collapsed = re.sub(r"-{4,}", "---", stripped) 
-        cleaned.append(" ".join(collapsed.split()))
-
+        collapsed = re.sub(r"-{4,}", "---", line) 
+        cleaned.append("|".join(part.strip() for part in collapsed.split("|")))
     return "\n".join(cleaned)
 
 def build_chunks(paper: list[tuple], splitter: MarkdownTextSplitter):
