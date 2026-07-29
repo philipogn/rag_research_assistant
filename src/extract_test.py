@@ -35,26 +35,6 @@ def _extract_paper_content(file: Path, converter: DocumentConverter) -> list[dic
     # print(items)
     return items
 
-def _chunk_table_markdown(table_markdown: str, chunk_size: int) -> list[str]:
-    """Split an oversized table on row boundaries, repeating the header+separator in each piece."""
-    if len(table_markdown) <= chunk_size:
-        return [table_markdown]
-
-    lines = table_markdown.split("\n")
-    header = lines[:2]  # header row + separator row
-    chunks = []
-    current = list(header)
-    current_len = len("\n".join(current))
-    for row in lines[2:]:
-        if current_len + len(row) + 1 > chunk_size and len(current) > 2:
-            chunks.append("\n".join(current))
-            current = list(header)
-            current_len = len("\n".join(current))
-        current.append(row)
-        current_len += len(row) + 1
-    if len(current) > 2:
-        chunks.append("\n".join(current))
-    return chunks
 
 def files_to_docling():
     converter = DocumentConverter()
@@ -80,6 +60,22 @@ def files_to_docling():
 #         return md_text[:match.start()].rstrip()
 #     return md_text
 
+def _preprocess_table(table_markdown: str) -> str:
+    """
+    Docling to markdown introduces whitespace for alignment, 
+    cleaning up to reduce chunk size 
+    """
+    cleaned = []
+    for line in table_markdown.split():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # matches at 4 dashes, minimise seperator to 3 dashes for readability/debugging and avoids removing dash for n/a data
+        collapsed = re.sub(r"-{4,}", "---", stripped) 
+        cleaned.append(" ".join(collapsed.split()))
+
+    return "\n".join(cleaned)
+
 def build_chunks(paper: list[tuple], splitter: MarkdownTextSplitter):
     chunks = [] # build to return
     heading = "" # keep track of latest heading for section aware splitting
@@ -91,17 +87,26 @@ def build_chunks(paper: list[tuple], splitter: MarkdownTextSplitter):
         combined = "\n\n".join(pending_parts)
         for piece in splitter.split_text(combined):
             sectioned_chunk = f"[Section: {heading}]\n{piece}"
-            chunks.append((sectioned_chunk))
+            chunks.append((current_page, sectioned_chunk))
 
     for page_num, label, text in paper:
         if label == "section_header":
             # function to build all previous text under prev header
+            build_pending_parts()
             # then update header
             heading = text.strip()
-            pass
+            continue
+
+        # TODO: if table, save somewhere and continue building text before creating chunk to avoid between table text splitting 
         if label == "table":
-            # same as above to avoid table seperating texts
-            pass
+            # same as above to avoid table seperating texts (keeping tables atomic/poor retrieval on splitted tables)
+            build_pending_parts()
+            clean_table = _preprocess_table(text)
+            tagged_table = f"[Section: {heading}]\n{clean_table}"
+            chunks.append((page_num, tagged_table))
+            # print(chunks[-1])
+            continue
+
         if current_page is not None and page_num != current_page: # if page mismatch, build prev text, keeps metadata intact
             build_pending_parts()
         current_page = page_num
@@ -109,7 +114,6 @@ def build_chunks(paper: list[tuple], splitter: MarkdownTextSplitter):
 
     build_pending_parts() # final run for any leftover text
     return chunks
-
 
 
 def text_splitting(documents: list[dict]):
@@ -127,11 +131,11 @@ def text_splitting(documents: list[dict]):
 
         chunks = build_chunks(paper["content"], splitter)
 
-        for idx, chunk in enumerate(chunks):
+        for idx, (page_number, chunk) in enumerate(chunks):
             chunk_ids = f"{paper_id}_{idx}"
             ids.append(chunk_ids)
             texts.append(chunk)
-            # metadata.append({"paper": paper_id, "page": page_number})
+            metadata.append({"paper": paper_id, "page": page_number})
 
     embeddings = [embed_texts(text) for text in texts]
     collection.upsert(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadata)
@@ -141,5 +145,5 @@ def text_splitting(documents: list[dict]):
 if __name__ == "__main__":
     files = files_to_docling()
     print(f"Chunking {len(files)} files")
-    # ids, texts, metadata = text_splitting(files)
-    # print(f"Embedded {len(ids)} chunks")
+    ids, texts, metadata = text_splitting(files)
+    print(f"Embedded {len(ids)} chunks")
