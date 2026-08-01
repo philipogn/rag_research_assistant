@@ -76,37 +76,35 @@ def build_chunks(paper: list[tuple], splitter: MarkdownTextSplitter):
     chunks = [] # build to return
     heading = "" # keep track of latest heading for section aware splitting
     current_page = None
-    pending_parts = []
+    pending_text = []
+    pending_tables = []
 
     def build_pending_parts():
-        if not pending_parts: return
-        combined = "\n\n".join(pending_parts)
-        for piece in splitter.split_text(combined):
-            sectioned_chunk = f"[Section: {heading}]\n{piece}"
-            chunks.append((current_page, sectioned_chunk))
+        if pending_text:
+            combined = "\n\n".join(pending_text)
+            for piece in splitter.split_text(combined):
+                sectioned_chunk = f"[Section: {heading}]\n{piece}" if heading else piece
+                chunks.append((current_page, sectioned_chunk))
+            pending_text.clear()
+
+        for table_page, table_content in pending_tables:
+            tagged_table = f"[Section: {heading}]\n{table_content}" if heading else table_content
+            chunks.append((table_page, tagged_table))
+        pending_tables.clear()
 
     for page_num, label, text in paper:
         if label == "section_header":
-            # function to build all previous text under prev header
+            # build all previous text under prev header, then update header
             build_pending_parts()
-            # then update header
             heading = text.strip()
             continue
-
-        # TODO: if table, save somewhere and continue building text before creating chunk to avoid between table text splitting 
         if label == "table":
-            # same as above to avoid table seperating texts (keeping tables atomic/poor retrieval on splitted tables)
-            build_pending_parts()
-            clean_table = _preprocess_table(text)
-            tagged_table = f"[Section: {heading}]\n{clean_table}"
-            chunks.append((page_num, tagged_table))
-            # print(chunks[-1])
+            pending_tables.append((page_num, _preprocess_table(text)))
             continue
-
         if current_page is not None and page_num != current_page: # if page mismatch, build prev text, keeps metadata intact
             build_pending_parts()
         current_page = page_num
-        pending_parts.append(text)
+        pending_text.append(text)
 
     build_pending_parts() # final run for any leftover text
     return chunks
