@@ -74,6 +74,7 @@ services:
     image: python:3.11-slim
     profiles:
       - python
+    entrypoint: ["sh", "-c", "apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libxcb1 > /dev/null && exec \"$@\"", "--"]
     volumes:
       - .:/app
       - python_packages:/usr/local/lib/python3.11/site-packages
