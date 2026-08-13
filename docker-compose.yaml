@@ -68,13 +68,15 @@ services:
       ANONYMIZED_TELEMETRY: "false"
       IS_PERSISTENT: "true"
     volumes:
-      - chroma_data:/chroma/chroma
+      - chroma_data:/data
 
   python:
-    image: python:3.11-slim
+    build:
+      context: .
+      dockerfile: src/Dockerfile
     profiles:
       - python
-    entrypoint: ["sh", "-c", "apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libxcb1 > /dev/null && exec \"$@\"", "--"]
+    user: root
     volumes:
       - .:/app
       - python_packages:/usr/local/lib/python3.11/site-packages

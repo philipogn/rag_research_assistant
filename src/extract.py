@@ -13,23 +13,25 @@ _REFERENCES_HEADING = re.compile(r"^[\d.\s]*references?\b", re.IGNORECASE)
 
 
 def _extract_paper_content(file: Path, converter: DocumentConverter) -> list[dict]:
-    """Extracts page number, label, and text attributes"""
+    """
+    Extracts page number, label, and text attributes
+    Skips pictures and cuts at references
+    """
     result = converter.convert(str(file))
     doc = result.document
     # doc.save_as_json(output_dir / f"test_{file.stem}.json")
     # print(doc.export_to_markdown())
     
     items = []
-    for item, _ in doc.iterate_items():
+    for item, _level in doc.iterate_items():
         if not getattr(item, "prov", None):
             continue
         page_num = item.prov[0].page_no
         label = getattr(item, "label", "")
 
         if label == "section_header" and _REFERENCES_HEADING.match(getattr(item, "text", "").strip()):
-            break # if references reached, break
-
-        if label == "picture": # skip pics, not useful
+            break
+        if label == "picture":
             continue
         elif label == "table":
             items.append((page_num, "table", item.export_to_markdown(doc)))
@@ -37,7 +39,6 @@ def _extract_paper_content(file: Path, converter: DocumentConverter) -> list[dic
             text = getattr(item, "text", "")
             if text and text.strip():
                 items.append((page_num, label, text))
-    # print(items)
     return items
 
 
@@ -54,22 +55,24 @@ def files_to_docling():
     return papers
 
 
-
 def _preprocess_table(table_markdown: str) -> str:
     """
-    Docling to markdown introduces whitespace for alignment, 
-    cleaning up to reduce chunk size 
+    Strips preceeding and leading whitespace and truncate seperator to 3 dashes for tables
+    This reduces chunk size 
     """
     cleaned = []
     for line in table_markdown.split("\n"):
-        # matches at 4 dashes, minimise seperator to 3 dashes for readability/debugging and avoids removing dash for n/a data
         collapsed = re.sub(r"-{4,}", "---", line) 
         cleaned.append("|".join(part.strip() for part in collapsed.split("|")))
     return "\n".join(cleaned)
 
-def build_chunks(paper: list[tuple], splitter: MarkdownTextSplitter):
-    chunks = [] # build to return
-    heading = "" # keep track of latest heading for section aware splitting
+
+def build_chunks(paper: list[tuple], splitter: MarkdownTextSplitter) -> list[tuple[int, str]]:
+    """
+    Build chunks on each page of PDF document, keeping tables atomic and text intact
+    """
+    chunks = []
+    heading = ""
     current_page = None
     pending_text = []
     pending_tables = []
@@ -101,13 +104,13 @@ def build_chunks(paper: list[tuple], splitter: MarkdownTextSplitter):
         current_page = page_num
         pending_text.append(text)
 
-    build_pending_parts() # final run for any leftover text
+    build_pending_parts()
     return chunks
 
 
 def text_splitting(documents: list[dict]):
     """
-    Chunk and embed the contents
+    Chunk and embed the contents of each PDF document
     Each paper are keys of {paper_id, content(page_num, label, text)}
     """
     splitter = MarkdownTextSplitter(chunk_size=config.CHUNK_SIZE, chunk_overlap=config.CHUNK_OVERLAP)

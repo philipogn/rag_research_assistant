@@ -29,7 +29,7 @@ Docker and Docker compose
 4. Ingest the papers into the vector database by running the extract script inside the Docker network:
 
    ```bash
-   docker compose run --rm python sh -c "pip install -r requirements.txt && python src/extract.py"
+   docker compose run --rm python python src/extract.py
    ```
 
    Re-run this whenever `data/` changes, existing chunks for a given paper are replaced.
