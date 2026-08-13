@@ -3,14 +3,32 @@ import re
 from docling.document_converter import DocumentConverter
 from langchain_text_splitters import MarkdownTextSplitter
 import config
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
 
 from embed import embed_texts, get_collection
 
 input_dir = Path("data")
 output_dir = Path("data/output_md")
+models_dir = Path("models/docling")
 
 _REFERENCES_HEADING = re.compile(r"^[\d.\s]*references?\b", re.IGNORECASE)
 
+def _build_converter() -> DocumentConverter:
+    """
+    Uses pre-downloaded model weights from models_dir instead of fetching from the HF Hub on every run. 
+    artifacts_path only ever reads from models_dir and never downloads on its own, so models_dir must already be populated 
+    Must run `python src/download_models.py` once, e.g. after cloning before this is called.
+    """
+    if not models_dir.exists() or not any(models_dir.iterdir()):
+        raise RuntimeError(
+            f"{models_dir} is empty - run `python src/download_models.py` once to populate it."
+        )
+    pipeline_options = PdfPipelineOptions(artifacts_path=models_dir)
+    return DocumentConverter(
+        format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
+    )
 
 def _extract_paper_content(file: Path, converter: DocumentConverter) -> list[dict]:
     """
@@ -42,8 +60,8 @@ def _extract_paper_content(file: Path, converter: DocumentConverter) -> list[dic
     return items
 
 
-def files_to_docling():
-    converter = DocumentConverter()
+def files_to_docling() -> list[tuple[str, str]]:
+    converter = _build_converter()
     papers = []
     for file in input_dir.glob("*.pdf"):
         content = _extract_paper_content(file, converter)

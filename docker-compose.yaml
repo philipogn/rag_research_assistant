@@ -79,11 +79,12 @@ services:
     user: root
     volumes:
       - .:/app
-      - python_packages:/usr/local/lib/python3.11/site-packages
     working_dir: /app
+    environment:
+      DOCLING_INFERENCE_COMPILE_TORCH_MODELS: "false"
+      TRANSFORMERS_VERBOSITY: "error"
 
 volumes:
   ollama_data:
   webui_data:
   chroma_data:
-  python_packages:

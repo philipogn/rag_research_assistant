@@ -26,10 +26,10 @@ Docker and Docker compose
 
    This starts Ollama (pulling the required models on first run), ChromaDB, the RAG bridge, and Open WebUI.
 
-4. Ingest the papers into the vector database by running the extract script inside the Docker network:
+4. Download the required OCR models to parse PDFs and ingest the papers into the vector database by running the script inside the Docker network:
 
    ```bash
-   docker compose run --rm python python src/extract.py
+   docker compose run --rm python sh -c "python src/download_models.py && python src/extract.py"
    ```
 
    Re-run this whenever `data/` changes, existing chunks for a given paper are replaced.
@@ -39,7 +39,7 @@ Docker and Docker compose
 
 ## How it works
 
-- **Ingestion** (`src/extract.py`): PDFs in `data/` are converted to markdown with `pymupdf4llm`, split into chunks (`src/config.py` controls chunk size/overlap), embedded, and upserted into a Chroma collection.
+- **Ingestion** (`src/extract.py`): PDFs in `data/` are converted to markdown with `docling`, split into chunks (`src/config.py` controls chunk size/overlap), embedded, and upserted into a Chroma collection.
 
 - **Embedding** (`src/embed.py`): wraps Ollama's `/api/embeddings` endpoint (default model `nomic-embed-text`) and gets/creates the Chroma collection.
 - **Retrieval + generation** (`src/rag.py`): embeds the incoming query, retrieves the top matching chunks from Chroma, builds a prompt with a system message that restricts the model to the retrieved context and requires inline `(paper, page)` citations, then calls Ollama's `/api/generate` endpoint (default model `llama3.2:latest`).
