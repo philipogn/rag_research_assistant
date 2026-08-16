@@ -9,4 +9,5 @@ CHROMA_PORT = 8000
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 150
 N_RESULTS = 10
+HISTORY_TURNS = 6  # number of prior chat messages (user+assistant) folded into condensing/generation
 

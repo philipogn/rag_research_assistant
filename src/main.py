@@ -4,7 +4,7 @@ import httpx
 from fastapi import Body, FastAPI
 
 import config
-from rag import generate_response, retrieve_relevant_chunks
+from rag import condense_query, generate_response, retrieve_relevant_chunks
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -17,19 +17,24 @@ def extract_sources(chunks: list[dict]) -> list[str]:
     return sorted({chunk["paper"] for chunk in chunks if chunk.get("paper")})
 
 
-def last_user_message(messages: list[dict]) -> str:
-    for message in reversed(messages):
-        if message.get("role") in ("user", "human"):
-            return message.get("content", "") or ""
-    return ""
+def split_history(messages: list[dict]) -> tuple[list[dict], str]:
+    """Splits messages into (previous chat, current query), taking the last user message as current"""
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].get("role") in ("user", "human"):
+            return messages[:i], messages[i].get("content", "") or ""
+    return [], ""
 
 
-def answer_query(query: str, model: str) -> tuple[str, list[str]]:
-    chunks = retrieve_relevant_chunks(query)
+def answer_query(messages: list[dict], model: str) -> tuple[str, list[str]]:
+    history, query = split_history(messages)
+
+    search_query = condense_query(query, history, model=model) if history else query
+    chunks = retrieve_relevant_chunks(search_query)
     if not chunks:
         return NO_CONTEXT_MESSAGE, []
 
-    answer = generate_response(query, chunks, model=model)
+    result = generate_response(query, chunks, model=model, history=history)
+    answer = result["answer"]
     sources = extract_sources(chunks)
     if sources:
         answer += f"\n\nSources: {', '.join(sources)}"
@@ -41,9 +46,10 @@ def chat(payload: dict = Body(default_factory=dict)):
     """Ollama-compatible /api/chat endpoint (with RAG)."""
     model = payload.get("model") or config.GENERATION_MODEL
     messages = payload.get("messages") or []
-    query = last_user_message(messages) or payload.get("prompt", "") or ""
+    if not messages and payload.get("prompt"):
+        messages = [{"role": "user", "content": payload["prompt"]}]
 
-    answer, _sources = answer_query(query, model)
+    answer, _sources = answer_query(messages, model)
 
     return {
         "model": model,
