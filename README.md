@@ -5,7 +5,8 @@ PDFs are converted to markdown, chunked, and embedded into a vector database, a 
 
 ## Prerequisites
 
-Docker and Docker compose
+- Docker and Docker compose
+- [Ollama](https://ollama.com) running on the host, with the models you want to use already pulled (e.g. `ollama pull llama3.2` and `ollama pull nomic-embed-text`). Don't have Ollama on the host? See [Optional: dockerized Ollama](#optional-dockerized-ollama) below.
 
 ## Running
 
@@ -24,7 +25,7 @@ Docker and Docker compose
    docker compose up -d
    ```
 
-   This starts Ollama (pulling the required models on first run), ChromaDB, the RAG bridge, and Open WebUI.
+   This starts ChromaDB, the RAG bridge, and Open WebUI. The RAG bridge talks to Ollama on the host (`http://host.docker.internal:11434` by default), nothing is downloaded into Docker.
 
 4. Download the required OCR models to parse PDFs and ingest the papers into the vector database by running the script inside the Docker network:
 
@@ -36,6 +37,34 @@ Docker and Docker compose
 
 
 4. Open Open WebUI at http://localhost:8080 and start chatting. Responses are generated from the retrieved paper excerpts and include a `Sources:` line listing the papers used.
+
+## Using a different model
+
+By default the generation model is `llama3.2:latest` and the embedding model is `nomic-embed-text`, any model you've already pulled in Ollama works instead. Create a `.env` file in the project root (Docker Compose loads it automatically) with the models you want, then restart the stack:
+
+```
+# for e.g.
+GENERATION_MODEL = mistral:latest
+EMBEDDING_MODEL = mxbai-embed-large
+```
+
+`OLLAMA_URL` can be set the same way if Ollama isn't reachable at `http://host.docker.internal:11434` (e.g. a remote host, or the dockerized Ollama below).
+
+### Optional: dockerized Ollama
+
+If you'd rather not install Ollama on the host, an `ollama` service is included but not started by default. Bring it up with:
+
+```bash
+docker compose --profile ollama up -d
+```
+
+and point the stack at it by adding to your `.env`:
+
+```
+OLLAMA_URL = http://ollama:11434
+```
+
+On first start it pulls whatever `GENERATION_MODEL`/`EMBEDDING_MODEL` are set to (defaulting to `llama3.2`/`nomic-embed-text`) into the container instead of the host.
 
 ## How it works
 
@@ -50,12 +79,12 @@ Docker and Docker compose
 
 Services (`docker-compose.yaml`):
 
-- `ollama` - serves the generation and embedding models, pulling `llama3.2` and `nomic-embed-text` on first start.
+- `ollama` - optional, opt-in (`--profile ollama`); serves the generation and embedding models, pulling whichever ones are configured on first start. Skipped by default in favor of an Ollama instance already running on the host.
 - `chromadb` - persistent vector store for paper chunks.
 - `rag-bridge` - the FastAPI app (`src/main.py`), built from `src/Dockerfile`.
 - `open-webui` - chat UI, configured to point at `rag-bridge` instead of Ollama directly.
-- `python` - a bare Python container with the repo mounted, used to run ingestion scripts inside the Docker network without rebuilding an image.
+- `python` - same image as `rag-bridge` (built from `src/Dockerfile`) with the repo bind-mounted, used to run ingestion/eval scripts inside the Docker network without starting the FastAPI server.
 
 ## Configuration
 
-Runtime settings (models, chunk size/overlap, hosts/ports) live in `src/config.py`.
+Runtime settings (models, chunk size/overlap, hosts/ports) live in `src/config.py`. `GENERATION_MODEL`, `EMBEDDING_MODEL`, and `OLLAMA_URL` can each be overridden via an environment variable of the same name (e.g. in a project-root `.env` file) without editing code.

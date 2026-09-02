@@ -1,11 +1,19 @@
 services:
+  # Optional, fully-dockerized Ollama. Not started by default - `docker compose up -d`
+  # skips it, so no image/model pull happens unless you opt in with:
+  #   docker compose --profile ollama up -d
+  # Useful if you don't already have Ollama running on the host. Pulls whichever
+  # models GENERATION_MODEL/EMBEDDING_MODEL are set to (see src/config.py), defaulting
+  # to llama3.2/nomic-embed-text.
   ollama:
     image: ollama/ollama:latest
+    profiles:
+      - ollama
     entrypoint: >
       /bin/sh -c "
         ollama serve &
         until ollama list > /dev/null 2>&1; do sleep 1; done &&
-        for model in llama3.2 nomic-embed-text; do
+        for model in ${GENERATION_MODEL:-llama3.2} ${EMBEDDING_MODEL:-nomic-embed-text}; do
           if ollama list | grep -q \"$$model\"; then
             echo \"$$model already present, skipping pull\";
           else
@@ -16,7 +24,7 @@ services:
         wait
       "
     healthcheck:
-      test: ["CMD-SHELL", "ollama list | grep -q llama3.2 && ollama list | grep -q nomic-embed-text || exit 1"]
+      test: ["CMD-SHELL", "ollama list | grep -q ${GENERATION_MODEL:-llama3.2} && ollama list | grep -q ${EMBEDDING_MODEL:-nomic-embed-text} || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -29,8 +37,6 @@ services:
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     depends_on:
-      ollama:
-        condition: service_healthy
       rag-bridge:
         condition: service_healthy
     ports:
@@ -45,12 +51,16 @@ services:
       context: .
       dockerfile: src/Dockerfile
     depends_on:
-      ollama:
-        condition: service_healthy
       chromadb:
         condition: service_started
     ports:
       - 8888:8888
+    environment:
+      # Passed through only if set in the host shell or a project-root .env file;
+      # otherwise src/config.py's defaults apply inside the container.
+      - GENERATION_MODEL
+      - EMBEDDING_MODEL
+      - OLLAMA_URL
     volumes:
       - .:/app
     healthcheck:
@@ -81,8 +91,17 @@ services:
       - .:/app
     working_dir: /app
     environment:
-      DOCLING_INFERENCE_COMPILE_TORCH_MODELS: "false"
-      TRANSFORMERS_VERBOSITY: "error"
+      # Layout model is a low-volume, run-once batch step here - torch.compile's warm-up cost
+      # isn't worth it, and disabling it also silences TorchDynamo's graph-break warnings.
+      - DOCLING_INFERENCE_COMPILE_TORCH_MODELS=false
+      # Silences transformers' harmless torch_dtype deprecation warning (docling still passes
+      # the old kwarg internally); revisit if a docling upgrade drops that kwarg entirely.
+      - TRANSFORMERS_VERBOSITY=error
+      # Passed through only if set in the host shell or a project-root .env file;
+      # otherwise src/config.py's defaults apply inside the container.
+      - GENERATION_MODEL
+      - EMBEDDING_MODEL
+      - OLLAMA_URL
 
 volumes:
   ollama_data:
